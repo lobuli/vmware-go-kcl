@@ -30,12 +30,12 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	chk "github.com/lobuli/vmware-go-kcl/clientlibrary/checkpoint"
+	cfg "github.com/lobuli/vmware-go-kcl/clientlibrary/config"
+	par "github.com/lobuli/vmware-go-kcl/clientlibrary/partition"
+	"github.com/lobuli/vmware-go-kcl/clientlibrary/utils"
+	wk "github.com/lobuli/vmware-go-kcl/clientlibrary/worker"
 	"github.com/stretchr/testify/assert"
-	chk "github.com/vmware/vmware-go-kcl/clientlibrary/checkpoint"
-	cfg "github.com/vmware/vmware-go-kcl/clientlibrary/config"
-	par "github.com/vmware/vmware-go-kcl/clientlibrary/partition"
-	"github.com/vmware/vmware-go-kcl/clientlibrary/utils"
-	wk "github.com/vmware/vmware-go-kcl/clientlibrary/worker"
 )
 
 func TestWorkerInjectCheckpointer(t *testing.T) {

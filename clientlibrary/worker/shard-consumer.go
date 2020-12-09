@@ -28,20 +28,20 @@
 package worker
 
 import (
+	"github.com/aws/aws-sdk-go/service/dynamodbstreams"
+	"github.com/aws/aws-sdk-go/service/dynamodbstreams/dynamodbstreamsiface"
 	"math"
 	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/service/kinesis"
-	"github.com/aws/aws-sdk-go/service/kinesis/kinesisiface"
 
-	chk "github.com/vmware/vmware-go-kcl/clientlibrary/checkpoint"
-	"github.com/vmware/vmware-go-kcl/clientlibrary/config"
-	kcl "github.com/vmware/vmware-go-kcl/clientlibrary/interfaces"
-	"github.com/vmware/vmware-go-kcl/clientlibrary/metrics"
-	par "github.com/vmware/vmware-go-kcl/clientlibrary/partition"
+	chk "github.com/lobuli/vmware-go-kcl/clientlibrary/checkpoint"
+	"github.com/lobuli/vmware-go-kcl/clientlibrary/config"
+	kcl "github.com/lobuli/vmware-go-kcl/clientlibrary/interfaces"
+	"github.com/lobuli/vmware-go-kcl/clientlibrary/metrics"
+	par "github.com/lobuli/vmware-go-kcl/clientlibrary/partition"
 )
 
 const (
@@ -73,7 +73,7 @@ type ShardConsumerState int
 type ShardConsumer struct {
 	streamName      string
 	shard           *par.ShardStatus
-	kc              kinesisiface.KinesisAPI
+	kc              dynamodbstreamsiface.DynamoDBStreamsAPI
 	checkpointer    chk.Checkpointer
 	recordProcessor kcl.IRecordProcessor
 	kclConfig       *config.KinesisClientLibConfiguration
@@ -99,19 +99,19 @@ func (sc *ShardConsumer) getShardIterator(shard *par.ShardStatus) (*string, erro
 		log.Debugf("No checkpoint recorded for shard: %v, starting with: %v", shard.ID,
 			aws.StringValue(shardIteratorType))
 
-		var shardIterArgs *kinesis.GetShardIteratorInput
+		var shardIterArgs *dynamodbstreams.GetShardIteratorInput
 		if initPos == config.AT_TIMESTAMP {
-			shardIterArgs = &kinesis.GetShardIteratorInput{
+			shardIterArgs = &dynamodbstreams.GetShardIteratorInput{
 				ShardId:           &shard.ID,
 				ShardIteratorType: shardIteratorType,
 				Timestamp:         sc.kclConfig.InitialPositionInStreamExtended.Timestamp,
-				StreamName:        &sc.streamName,
+				StreamArn:         &sc.streamName,
 			}
 		} else {
-			shardIterArgs = &kinesis.GetShardIteratorInput{
+			shardIterArgs = &dynamodbstreams.GetShardIteratorInput{
 				ShardId:           &shard.ID,
 				ShardIteratorType: shardIteratorType,
-				StreamName:        &sc.streamName,
+				StreamArn:         &sc.streamName,
 			}
 		}
 
@@ -123,11 +123,11 @@ func (sc *ShardConsumer) getShardIterator(shard *par.ShardStatus) (*string, erro
 	}
 
 	log.Debugf("Start shard: %v at checkpoint: %v", shard.ID, shard.Checkpoint)
-	shardIterArgs := &kinesis.GetShardIteratorInput{
-		ShardId:                &shard.ID,
-		ShardIteratorType:      aws.String("AFTER_SEQUENCE_NUMBER"),
-		StartingSequenceNumber: &shard.Checkpoint,
-		StreamName:             &sc.streamName,
+	shardIterArgs := &dynamodbstreams.GetShardIteratorInput{
+		ShardId:           &shard.ID,
+		ShardIteratorType: aws.String("AFTER_SEQUENCE_NUMBER"),
+		SequenceNumber:    &shard.Checkpoint,
+		StreamArn:         &sc.streamName,
 	}
 	iterResp, err := sc.kc.GetShardIterator(shardIterArgs)
 	if err != nil {
@@ -187,7 +187,7 @@ func (sc *ShardConsumer) getRecords(shard *par.ShardStatus) error {
 		getRecordsStartTime := time.Now()
 
 		log.Debugf("Trying to read %d record from iterator: %v", sc.kclConfig.MaxRecords, aws.StringValue(shardIterator))
-		getRecordsArgs := &kinesis.GetRecordsInput{
+		getRecordsArgs := &dynamodbstreams.GetRecordsInput{
 			Limit:         aws.Int64(int64(sc.kclConfig.MaxRecords)),
 			ShardIterator: shardIterator,
 		}
@@ -195,7 +195,7 @@ func (sc *ShardConsumer) getRecords(shard *par.ShardStatus) error {
 		getResp, err := sc.kc.GetRecords(getRecordsArgs)
 		if err != nil {
 			if awsErr, ok := err.(awserr.Error); ok {
-				if awsErr.Code() == kinesis.ErrCodeProvisionedThroughputExceededException || awsErr.Code() == ErrCodeKMSThrottlingException {
+				if awsErr.Code() == dynamodbstreams.ErrCodeExpiredIteratorException || awsErr.Code() == ErrCodeKMSThrottlingException {
 					log.Errorf("Error getting records from shard %v: %+v", shard.ID, err)
 					retriedErrors++
 					// exponential backoff
