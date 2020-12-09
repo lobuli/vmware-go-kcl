@@ -2,7 +2,7 @@ module github.com/lobuli/vmware-go-kcl
 
 require (
 	github.com/BurntSushi/toml v0.3.1 // indirect
-	github.com/aws/aws-sdk-go v1.36.5
+	github.com/aws/aws-sdk-go v1.36.2
 	github.com/google/uuid v1.1.1
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/prometheus/client_golang v0.9.3
